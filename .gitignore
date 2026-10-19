@@ -29,9 +29,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Banco de Dados (Específico para o seu projeto)
-# O código em main.py cria o arquivo fabtec.db
-fabtec.db
+# Banco de Dados
+*.db
 *.sqlite3
 
 # IDEs e Editores
@@ -51,3 +50,6 @@ desktop.ini
 .pytest_cache/
 .mypy_cache/
 .coverage
+
+# Instruções locais do Claude Code
+CLAUDE.local.md
