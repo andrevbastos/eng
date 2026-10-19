@@ -1,10 +1,14 @@
-"""DemandaService (RS015, RF001, RS017)."""
+"""DemandaService (RS015, RF001, RS017, RS011)."""
+import datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from src.models import CANAIS_ORIGEM, STATUS_DEMANDA, STATUS_PADRAO, Demanda, Documento, Subsidio
-from src.services import historico
+from src.models import (
+    CANAIS_ORIGEM, STATUS_DEMANDA, STATUS_PADRAO, Demanda, Documento, Subsidio, tags_demandas,
+)
+from src.services import historico, pesquisa
 from src.services.base import ComTags, ServicoBase, exigir, exigir_data, exigir_opcao
 
 OBRIGATORIOS_DEMANDA = (
@@ -28,6 +32,46 @@ class DemandaService(ComTags, ServicoBase):
         selectinload(Demanda.subsidios).selectinload(Subsidio.tags),
         selectinload(Demanda.subsidios).selectinload(Subsidio.documentos).selectinload(Documento.tags),
     )
+
+    # RS011: campos comparados por similaridade (além do id e dos nomes das tags).
+    campos_pesquisa = ("titulo", "alvo_motivo", "origem_remetente", "observacoes")
+
+    def pesquisar(
+        self,
+        texto: str | None = None,
+        *,
+        status: str | None = None,
+        tag_id: int | None = None,
+        canal: str | None = None,
+        entrada_de: datetime.date | None = None,
+        entrada_ate: datetime.date | None = None,
+        limite_de: datetime.date | None = None,
+        limite_ate: datetime.date | None = None,
+        pagina: int = 1,
+    ) -> pesquisa.Pagina:
+        """Pesquisa por texto combinada com filtros (RS011, RF006–RF008), paginada (RS018)."""
+        condicoes = []
+        if status:
+            condicoes.append(Demanda.status == status)
+        if canal:
+            condicoes.append(Demanda.origem_canal == canal)
+        if tag_id is not None:
+            condicoes.append(Demanda.id.in_(
+                select(tags_demandas.c.demanda_id).where(tags_demandas.c.tag_id == tag_id)
+            ))
+        for coluna, inicio, fim in (
+            (Demanda.data_entrada, entrada_de, entrada_ate),
+            (Demanda.data_limite, limite_de, limite_ate),
+        ):
+            if inicio:
+                condicoes.append(coluna >= inicio)
+            if fim:
+                condicoes.append(coluna <= fim)
+        with self._transacao() as sessao:
+            return pesquisa.pesquisar(
+                sessao, Demanda, condicoes, texto, pagina, self.campos_pesquisa,
+                tags_demandas, "demanda_id",
+            )
 
     def listar_historico(self, demanda_id: int) -> list:
         """Histórico da demanda e dos seus subsídios e documentos atuais (RF014)."""
