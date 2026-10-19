@@ -73,7 +73,7 @@ def test_rs017_salvar_desabilitado_ate_preencher_obrigatorios(demandas):
     preencher(form, **{k: v for k, v in DADOS_DEMANDA.items()})
     assert form.btn_salvar.cget("state") == "normal"
 
-    form.campos["data_limite"].var.set("31/02/2026")
+    form.campos["data_limite"].entrada.definir("31/02/2026")
     form.atualizar_estado()
     assert form.btn_salvar.cget("state") == "disabled"
     assert "DD/MM/AAAA" in form.campos["data_limite"].lbl_erro.cget("text")

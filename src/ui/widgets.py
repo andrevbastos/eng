@@ -87,16 +87,14 @@ class Campo(ctk.CTkFrame):
             self.ao_mudar()
 
 
-class CampoTexto(Campo):
-    placeholder = ""
+class Entrada(ctk.CTkEntry):
+    """Entrada de uma linha que avisa quando o texto muda.
 
-    def _criar_widget(self):
-        self.var = ctk.StringVar()
-        self.var.trace_add("write", self._mudou)
-        return ctk.CTkEntry(
-            self,
-            textvariable=self.var,
-            placeholder_text=self.placeholder or None,
+    Não usa textvariable: com ela, o CustomTkinter não mostra o placeholder.
+    """
+
+    def __init__(self, parent, ao_mudar: Callable | None = None, **kwargs):
+        opcoes = dict(
             font=Fonts.BODY,
             fg_color=Colors.BG_INPUT,
             border_color=Colors.BORDER,
@@ -104,12 +102,46 @@ class CampoTexto(Campo):
             placeholder_text_color=Colors.TEXT_MUTED,
             height=32,
         )
+        opcoes.update(kwargs)
+        super().__init__(parent, **opcoes)
+        self.ao_mudar = ao_mudar
+        self._ultimo = ""
+        self.bind("<KeyRelease>", lambda _e: self._verificar())
+        for evento in ("<<Paste>>", "<<Cut>>"):
+            self.bind(evento, lambda _e: self.after_idle(self._verificar))
 
     def texto(self) -> str:
-        return self.var.get()
+        return self.get()
+
+    def definir(self, texto: str) -> None:
+        self.delete(0, "end")
+        if texto:
+            self.insert(0, texto)
+        elif self.focus_get() is not self._entry:
+            # O CustomTkinter só devolve o placeholder ao perder o foco; aqui o foco já está fora.
+            self._activate_placeholder()
+        self._verificar()
+
+    def _verificar(self) -> None:
+        atual = self.get()
+        if atual != self._ultimo:
+            self._ultimo = atual
+            if self.ao_mudar:
+                self.ao_mudar()
+
+
+class CampoTexto(Campo):
+    placeholder = ""
+
+    def _criar_widget(self):
+        self.entrada = Entrada(self, ao_mudar=self._mudou, placeholder_text=self.placeholder or None)
+        return self.entrada
+
+    def texto(self) -> str:
+        return self.entrada.texto()
 
     def definir(self, valor: Any) -> None:
-        self.var.set("" if valor is None else str(valor))
+        self.entrada.definir("" if valor is None else str(valor))
 
 
 class CampoData(CampoTexto):
@@ -119,7 +151,7 @@ class CampoData(CampoTexto):
         return ler_data_br(self.texto())
 
     def definir(self, valor: Any) -> None:
-        self.var.set(data_br(valor))
+        self.entrada.definir(data_br(valor))
 
 
 class CampoTextoLongo(Campo):
@@ -222,8 +254,8 @@ class CampoPasta(CampoTexto):
 
     def _criar_widget(self):
         linha = ctk.CTkFrame(self, fg_color="transparent")
-        self.entrada = super()._criar_widget()
-        self.entrada.pack(in_=linha, side="left", fill="x", expand=True, padx=(0, 8))
+        self.entrada = Entrada(linha, ao_mudar=self._mudou)
+        self.entrada.pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(
             linha,
             text="Procurar pasta...",
@@ -243,7 +275,86 @@ class CampoPasta(CampoTexto):
     def _procurar(self):
         pasta = filedialog.askdirectory(title="Selecione a pasta local dos documentos")
         if pasta:
-            self.var.set(pasta)
+            self.entrada.definir(pasta)
+
+
+# --- Filtros da pesquisa (RF007) ------------------------------------------------
+
+class FiltroOpcoes(ctk.CTkComboBox):
+    """Lista de opções com uma primeira opção "todos", que remove o filtro."""
+
+    def __init__(self, parent, todos: str, opcoes: dict[str, Any], ao_mudar: Callable, width: int = 140):
+        self.todos = todos
+        self.mapa: dict[str, Any] = {}
+        super().__init__(
+            parent,
+            values=[todos],
+            state="readonly",
+            width=width,
+            height=30,
+            font=Fonts.SMALL,
+            dropdown_font=Fonts.SMALL,
+            fg_color=Colors.BG_INPUT,
+            border_color=Colors.BORDER,
+            button_color=Colors.BG_BTN_SEC,
+            button_hover_color=Colors.BG_BTN_SEC_HOVER,
+            text_color=Colors.TEXT_MAIN,
+            dropdown_fg_color=Colors.BG_INPUT,
+            dropdown_text_color=Colors.TEXT_MAIN,
+            dropdown_hover_color=Colors.BG_BTN_SEC_HOVER,
+            command=lambda _valor: ao_mudar(),
+        )
+        self.definir_opcoes(opcoes)
+        self.set(todos)
+
+    def definir_opcoes(self, opcoes: dict[str, Any]) -> None:
+        """Troca as opções sem avisar; se a escolhida sumiu (ex.: tag excluída), volta a "todos"."""
+        self.mapa = dict(opcoes)
+        self.configure(values=[self.todos, *self.mapa])
+        if self.get() not in self.mapa:
+            self.set(self.todos)
+
+    def valor(self) -> Any:
+        return self.mapa.get(self.get())
+
+    def escolher(self, rotulo: str) -> None:
+        self.set(rotulo)
+        self._command(rotulo)
+
+    def ativo(self) -> bool:
+        return self.get() != self.todos
+
+    def limpar(self) -> None:
+        self.set(self.todos)
+
+
+class FiltroData(Entrada):
+    """Data DD/MM/AAAA opcional; inválida fica com a borda destacada e não filtra."""
+
+    def __init__(self, parent, ao_mudar: Callable, width: int = 100):
+        super().__init__(parent, ao_mudar=lambda: self._mudou(ao_mudar), placeholder_text="DD/MM/AAAA",
+                         width=width, height=30, font=Fonts.SMALL)
+
+    def _mudou(self, ao_mudar: Callable) -> None:
+        self.configure(border_color=Colors.ERRO_FG if self.invalida() else Colors.BORDER)
+        ao_mudar()
+
+    def valor(self):
+        """Levanta ValueError se o texto não for uma data válida."""
+        return ler_data_br(self.texto())
+
+    def invalida(self) -> bool:
+        try:
+            self.valor()
+        except ValueError:
+            return True
+        return False
+
+    def ativo(self) -> bool:
+        return bool(self.texto().strip())
+
+    def limpar(self) -> None:
+        self.definir("")
 
 
 # --- Elementos de exibição ----------------------------------------------------
