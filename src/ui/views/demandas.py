@@ -12,7 +12,7 @@ from src.ui.views.aba import AbaBase, Coluna
 from src.ui.views.detalhe import LARGURA_TEXTO, DetalheBase
 from src.ui.views.formulario import Especificacao as E
 from src.ui.views.formulario import FormularioView
-from src.ui.widgets import botao
+from src.ui.widgets import FiltroData, FiltroOpcoes, botao
 
 LINHAS_DEMANDA = [
     [E("titulo", obrigatorio=True)],
@@ -50,9 +50,58 @@ class AbaDemandas(AbaBase):
     ]
     titulo_lista = "DEMANDAS"
     texto_novo = "+ Nova demanda"
+    texto_busca = "Pesquisar por id, título, motivo, remetente, observações ou tag..."
+    texto_sem_registros = "Nenhuma demanda cadastrada."
 
-    def registros(self) -> list:
-        return self.servicos.demandas.listar()
+    def _build_filtros(self, parent) -> None:
+        linha1 = ctk.CTkFrame(parent, fg_color="transparent")
+        linha1.pack(fill="x")
+        self.f_status = FiltroOpcoes(linha1, "Todos os status", {s: s for s in STATUS_DEMANDA},
+                                     self.pesquisar, width=200)
+        self.f_canal = FiltroOpcoes(linha1, "Todos os canais", {c: c for c in CANAIS_ORIGEM},
+                                    self.pesquisar, width=140)
+        self.f_tag = FiltroOpcoes(linha1, "Todas as tags", {}, self.pesquisar, width=150)
+        for filtro in (self.f_status, self.f_canal, self.f_tag):
+            filtro.pack(side="left", padx=(0, 6))
+
+        linha2 = ctk.CTkFrame(parent, fg_color="transparent")
+        linha2.pack(fill="x", pady=(6, 0))
+        # RS011: intervalo de datas sobre a data de entrada ou a data limite.
+        self.f_campo_data = FiltroOpcoes(linha2, "Data de entrada", {"Data limite": "limite"},
+                                         self.pesquisar, width=140)
+        self.f_campo_data.pack(side="left", padx=(0, 6))
+        self.f_de = FiltroData(linha2, self._agendar_pesquisa)
+        self.f_ate = FiltroData(linha2, self._agendar_pesquisa)
+        for rotulo, campo in (("de", self.f_de), ("até", self.f_ate)):
+            ctk.CTkLabel(linha2, text=rotulo, font=Fonts.SMALL, text_color=Colors.TEXT_MUTED).pack(side="left", padx=(0, 4))
+            campo.pack(side="left", padx=(0, 6))
+        self.botao_limpar(linha2).pack(side="right")
+        # O campo de data sozinho não filtra nada: fica fora de filtros_ativos().
+        self.filtros = [self.f_status, self.f_canal, self.f_tag, self.f_de, self.f_ate]
+
+    def atualizar_opcoes_filtros(self) -> None:
+        self.f_tag.definir_opcoes({tag.nome: tag.id for tag in self.servicos.tags.listar()})
+
+    def valores_filtros(self) -> dict | None:
+        try:
+            de, ate = self.f_de.valor(), self.f_ate.valor()
+        except ValueError:
+            return None
+        campo = self.f_campo_data.valor() or "entrada"
+        return {
+            "status": self.f_status.valor(),
+            "canal": self.f_canal.valor(),
+            "tag_id": self.f_tag.valor(),
+            f"{campo}_de": de,
+            f"{campo}_ate": ate,
+        }
+
+    def limpar_filtros(self) -> None:
+        self.f_campo_data.limpar()
+        super().limpar_filtros()
+
+    def consultar(self, texto: str, pagina: int, **filtros):
+        return self.servicos.demandas.pesquisar(texto, pagina=pagina, **filtros)
 
     def valores_linha(self, demanda) -> tuple:
         return (demanda.id, demanda.titulo, demanda.status, data_br(demanda.data_limite))

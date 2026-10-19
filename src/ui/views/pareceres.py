@@ -1,11 +1,14 @@
 """
 Aba Pareceres (RF002, RF010, RF014, RS012, RS017, RD004).
 """
+import customtkinter as ctk
+
 from src.ui.formatos import data_br
 from src.ui.views.aba import AbaBase, Coluna
 from src.ui.views.detalhe import DetalheBase
 from src.ui.views.formulario import Especificacao as E
 from src.ui.views.formulario import FormularioView
+from src.ui.widgets import FiltroOpcoes
 
 LINHAS_PARECER = [
     [E("numero", obrigatorio=True, rotulo="Número do parecer"), E("data", "data", obrigatorio=True, rotulo="Data de emissão")],
@@ -24,9 +27,29 @@ class AbaPareceres(AbaBase):
     ]
     titulo_lista = "PARECERES"
     texto_novo = "+ Novo parecer"
+    texto_busca = "Pesquisar por id, número, assunto, observações ou tag..."
+    texto_sem_registros = "Nenhum parecer cadastrado."
 
-    def registros(self) -> list:
-        return self.servicos.pareceres.listar()
+    def _build_filtros(self, parent) -> None:
+        linha = ctk.CTkFrame(parent, fg_color="transparent")
+        linha.pack(fill="x")
+        self.f_tag = FiltroOpcoes(linha, "Todas as tags", {}, self.pesquisar, width=170)
+        # Decisão da sessão 0: pareceres filtrados pelo ano de emissão.
+        self.f_ano = FiltroOpcoes(linha, "Todos os anos", {}, self.pesquisar, width=130)
+        for filtro in (self.f_tag, self.f_ano):
+            filtro.pack(side="left", padx=(0, 6))
+        self.botao_limpar(linha).pack(side="right")
+        self.filtros = [self.f_tag, self.f_ano]
+
+    def atualizar_opcoes_filtros(self) -> None:
+        self.f_tag.definir_opcoes({tag.nome: tag.id for tag in self.servicos.tags.listar()})
+        self.f_ano.definir_opcoes({str(ano): ano for ano in self.servicos.pareceres.anos()})
+
+    def valores_filtros(self) -> dict | None:
+        return {"tag_id": self.f_tag.valor(), "ano": self.f_ano.valor()}
+
+    def consultar(self, texto: str, pagina: int, **filtros):
+        return self.servicos.pareceres.pesquisar(texto, pagina=pagina, **filtros)
 
     def valores_linha(self, parecer) -> tuple:
         return (parecer.id, parecer.numero, parecer.assunto, data_br(parecer.data))
