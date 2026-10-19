@@ -1,37 +1,56 @@
-import os
-import sys
+import datetime
+
 import pytest
+from sqlalchemy.orm import Session
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from src.database.base import MEMORIA, criar_engine, criar_tabelas
+from src.models import Demanda, Parecer
 
-# Adiciona o diretório 'src' ao sys.path para importações funcionarem
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from database.base import Base
-# Importar todos os modelos para garantir que o Base.metadata reconheça todas as tabelas
-import models.demandas
-import models.documentos
-import models.pareceres
-import models.subsidios
-import models.tags
+@pytest.fixture
+def engine():
+    engine = criar_engine(MEMORIA)
+    criar_tabelas(engine)
+    yield engine
+    engine.dispose()
 
-# Mock global do engine antes de qualquer serviço importá-lo
-test_engine = create_engine("sqlite:///:memory:", echo=False)
-import database.base
-database.base.engine = test_engine
 
-@pytest.fixture(scope="function")
-def db_session():
-    # Cria as tabelas no banco em memória global
-    Base.metadata.create_all(test_engine)
-    
-    # Cria uma sessão
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-    session = SessionLocal()
-    
-    yield session
-    
-    # Após o teste: fecha a sessão e limpa as tabelas para o próximo teste
-    session.close()
-    Base.metadata.drop_all(test_engine)
+@pytest.fixture
+def sessao(engine):
+    with Session(engine) as sessao:
+        yield sessao
+
+
+@pytest.fixture
+def nova_demanda():
+    """Fábrica de Demanda válida; os campos podem ser sobrescritos por kwargs."""
+
+    def _nova(**campos) -> Demanda:
+        dados = dict(
+            titulo="Ofício MPF 12/2026",
+            alvo_motivo="Esclarecimento sobre o Edital nº 04/2026",
+            data_entrada=datetime.date(2026, 8, 10),
+            data_limite=datetime.date(2026, 8, 20),
+            origem_canal="E-mail",
+            origem_remetente="Proj. MPF Joinville",
+            origem_destinatario="Assessoria Jurídica IFC",
+        )
+        dados.update(campos)
+        return Demanda(**dados)
+
+    return _nova
+
+
+@pytest.fixture
+def novo_parecer():
+    def _novo(**campos) -> Parecer:
+        dados = dict(
+            numero="PJ-042/2026",
+            assunto="Dispensa de licitação para insumos de pesquisa",
+            conclusao="Deferido",
+            data=datetime.date(2026, 5, 15),
+        )
+        dados.update(campos)
+        return Parecer(**dados)
+
+    return _novo
