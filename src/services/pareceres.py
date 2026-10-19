@@ -1,0 +1,49 @@
+"""ParecerService (RS015, RF002, RS017, RD004)."""
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from src.models import Documento, Parecer
+from src.services import historico
+from src.services.base import ComTags, ServicoBase, exigir, exigir_data
+
+OBRIGATORIOS_PARECER = ("numero", "assunto", "conclusao", "data")
+NUMERO_REPETIDO = "Já existe um parecer com este número."
+
+
+class ParecerService(ComTags, ServicoBase):
+    modelo = Parecer
+    tabela = "pareceres"
+    campos = ("numero", "assunto", "conclusao", "data", "observacoes")
+    carregar = (
+        selectinload(Parecer.tags),
+        selectinload(Parecer.documentos).selectinload(Documento.tags),
+    )
+
+    def listar_historico(self, parecer_id: int) -> list:
+        """Histórico do parecer e dos seus documentos atuais (RF014)."""
+        with self._transacao() as sessao:
+            parecer = self._obter(sessao, parecer_id, self.carregar)
+            registros = [("pareceres", parecer.id)] + [("documentos", d.id) for d in parecer.documentos]
+            return historico.consultar(sessao, registros)
+
+    def _validar(self, sessao: Session, dados: dict[str, Any], registro_id: int | None) -> dict[str, str]:
+        erros = exigir(dados, OBRIGATORIOS_PARECER)
+        exigir_data(erros, dados, "data")
+        if "numero" not in erros and self._numero_em_uso(sessao, dados["numero"], registro_id):
+            erros["numero"] = NUMERO_REPETIDO
+        return erros
+
+    def _numero_em_uso(self, sessao: Session, numero: str, registro_id: int | None) -> bool:
+        # Comparação sem diferenciar maiúsculas: "pj-042/2026" repete "PJ-042/2026".
+        consulta = select(Parecer.id).where(func.lower(Parecer.numero) == numero.lower())
+        if registro_id is not None:
+            consulta = consulta.where(Parecer.id != registro_id)
+        return sessao.scalar(consulta) is not None
+
+    def _descricao(self, parecer: Parecer) -> str:
+        return parecer.numero
+
+    def _documentos_de(self, parecer: Parecer) -> list[Documento]:
+        return list(parecer.documentos)

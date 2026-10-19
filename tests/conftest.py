@@ -54,3 +54,42 @@ def novo_parecer():
         return Parecer(**dados)
 
     return _novo
+
+
+# --- Serviços (RS015) --------------------------------------------------------
+
+@pytest.fixture
+def fabrica(engine):
+    from src.database.base import criar_fabrica_sessoes
+
+    return criar_fabrica_sessoes(engine)
+
+
+@pytest.fixture
+def servicos(fabrica):
+    from types import SimpleNamespace
+
+    from src.services import (
+        DemandaService, DocumentoService, ParecerService, SubsidioService, TagService,
+    )
+
+    return SimpleNamespace(
+        demandas=DemandaService(fabrica),
+        pareceres=ParecerService(fabrica),
+        subsidios=SubsidioService(fabrica),
+        documentos=DocumentoService(fabrica),
+        tags=TagService(fabrica),
+    )
+
+
+@pytest.fixture
+def arquivo(tmp_path):
+    """Fábrica de arquivo real no disco, para anexos (RF004)."""
+
+    def _arquivo(nome="notificacao_mpf.pdf", tamanho=128):
+        caminho = tmp_path / nome
+        with open(caminho, "wb") as f:
+            f.truncate(tamanho)
+        return str(caminho)
+
+    return _arquivo
