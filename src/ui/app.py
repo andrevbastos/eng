@@ -1,151 +1,105 @@
 """
-Main CustomTkinter Application Window for Assessoria Jurídica IFC.
-Manages top navigation tabs and active view containers.
+Janela principal da Assessoria Jurídica IFC.
+
+Uso único (NR006): abre direto, sem login. Sem banco configurado (RS001),
+mostra a escolha do arquivo .db na própria janela (NR002).
 """
+import sys
+from pathlib import Path
+
 import customtkinter as ctk
-from src.ui.theme import Colors, Fonts
+
+from src import config
+from src.aplicacao import Servicos, abrir_banco
+from src.config import Configuracao, ConfiguracaoError
+from src.ui.theme import ALTURA_MINIMA, LARGURA_MINIMA, Colors, aplicar_tema
+
+# A janela cabe numa tela de 1366×768 descontando barra de tarefas e título.
+LARGURA_MINIMA_JANELA = 1024
+ALTURA_MINIMA_JANELA = 640
+
 
 class App(ctk.CTk):
-    def __init__(self):
+    def __init__(self, arquivo_config: Path | None = None):
+        aplicar_tema()
         super().__init__()
-        
-        # Configure Window
-        self.title("Assessoria Jurídica IFC - Gestão de Demandas & Pareceres")
-        self.geometry("1000" + "x700")
-        self.minsize(920, 640)
-        self.configure(fg_color=Colors.BG_APP)
-        
-        # Navigation State
-        self.active_tab = "demandas"
+        self.arquivo_config = arquivo_config
+        self.servicos: Servicos | None = None
         self.current_view = None
-        
-        # Build UI layout
-        self._build_header()
-        self._build_content_area()
-        
-        # Initialize default view
-        self.show_demandas_list()
-        
-    def _build_header(self):
-        """Top Header Bar with Title and Navigation Tabs."""
-        self.header_frame = ctk.CTkFrame(
-            self,
-            fg_color=Colors.BG_HEADER,
-            corner_radius=0,
-            height=60,
-            border_width=1,
-            border_color=Colors.BORDER_SUBTLE
-        )
-        self.header_frame.pack(fill="x", side="top")
-        
-        # Inner layout for header
-        self.header_inner = ctk.CTkFrame(self.header_frame, fg_color="transparent")
-        self.header_inner.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        # Title Label
-        self.title_label = ctk.CTkLabel(
-            self.header_inner,
-            text="ASSESSORIA JURÍDICA IFC",
-            font=Fonts.SUBTITLE,
-            text_color=Colors.TEXT_MAIN
-        )
-        self.title_label.pack(side="left", padx=(0, 20))
-        
-        # Navigation Tabs Segmented Control / Buttons Container
-        self.tabs_frame = ctk.CTkFrame(
-            self.header_inner,
-            fg_color=Colors.BG_HEADER,
-            border_width=1,
-            border_color=Colors.BORDER_SUBTLE,
-            corner_radius=8
-        )
-        self.tabs_frame.pack(side="left")
-        
-        self.btn_tab_demandas = ctk.CTkButton(
-            self.tabs_frame,
-            text="Demandas",
-            font=Fonts.BODY_BOLD,
-            fg_color=Colors.BG_INPUT,
-            text_color=Colors.TEXT_MAIN,
-            hover_color=Colors.BG_BTN_SEC_HOVER,
-            corner_radius=6,
-            height=32,
-            width=120,
-            command=self.show_demandas_list
-        )
-        self.btn_tab_demandas.pack(side="left", padx=3, pady=3)
-        
-        self.btn_tab_pareceres = ctk.CTkButton(
-            self.tabs_frame,
-            text="Pareceres",
-            font=Fonts.BODY,
-            fg_color="transparent",
-            text_color=Colors.TEXT_MUTED,
-            hover_color=Colors.BG_BTN_SEC_HOVER,
-            corner_radius=6,
-            height=32,
-            width=120,
-            command=self.show_pareceres_list
-        )
-        self.btn_tab_pareceres.pack(side="left", padx=3, pady=3)
 
-    def _build_content_area(self):
-        """Main view container frame."""
-        self.content_container = ctk.CTkFrame(
-            self,
-            fg_color=Colors.BG_APP,
-            corner_radius=0
-        )
-        self.content_container.pack(fill="both", expand=True, padx=20, pady=16)
+        self.title("Assessoria Jurídica IFC - Gestão de Demandas & Pareceres")
+        self.geometry(f"{LARGURA_MINIMA}x{ALTURA_MINIMA}")
+        self.minsize(LARGURA_MINIMA_JANELA, ALTURA_MINIMA_JANELA)
+        self.configure(fg_color=Colors.BG_APP)
+        if sys.platform == "win32":
+            self.after(0, lambda: self.state("zoomed"))
+        self.protocol("WM_DELETE_WINDOW", self.fechar)
 
-    def _clear_content(self):
-        """Remove current view widget if exists."""
+        self._iniciar()
+
+    def _iniciar(self) -> None:
+        caminho = config.carregar(self.arquivo_config).caminho_db
+        if caminho is None:
+            self.mostrar_configuracao()
+            return
+        try:
+            self._abrir(config.validar_banco_existente(caminho))
+        except ConfiguracaoError as erro:
+            self.mostrar_configuracao(f"Não foi possível abrir o banco configurado. {erro}")
+
+    # --- Escolha do banco (RS001) --------------------------------------------
+
+    def usar_novo_banco(self, caminho: str | Path) -> None:
+        self._trocar_banco(lambda: config.validar_novo_banco(Path(caminho)))
+
+    def usar_banco_existente(self, caminho: str | Path) -> None:
+        self._trocar_banco(lambda: config.validar_banco_existente(Path(caminho)))
+
+    def _trocar_banco(self, validar) -> None:
+        try:
+            caminho = validar()
+            anterior = self.servicos
+            self._abrir(caminho)
+        except ConfiguracaoError as erro:
+            self.current_view.mostrar_erro(str(erro))
+            return
+        if anterior is not None:
+            anterior.fechar()
+
+    def _abrir(self, caminho: Path) -> None:
+        servicos = abrir_banco(caminho)
+        try:
+            config.salvar(Configuracao(caminho), self.arquivo_config)
+        except ConfiguracaoError:
+            servicos.fechar()
+            raise
+        self.servicos = servicos
+        self.mostrar_principal()
+
+    # --- Telas -----------------------------------------------------------------
+
+    def _trocar_tela(self, view) -> None:
         if self.current_view is not None:
             self.current_view.destroy()
-            self.current_view = None
+        self.current_view = view
+        view.pack(fill="both", expand=True)
 
-    def _update_tab_buttons(self, active_tab: str):
-        """Highlight active tab button."""
-        self.active_tab = active_tab
-        if active_tab == "demandas":
-            self.btn_tab_demandas.configure(fg_color=Colors.BG_INPUT, text_color=Colors.TEXT_MAIN, font=Fonts.BODY_BOLD)
-            self.btn_tab_pareceres.configure(fg_color="transparent", text_color=Colors.TEXT_MUTED, font=Fonts.BODY)
-        else:
-            self.btn_tab_demandas.configure(fg_color="transparent", text_color=Colors.TEXT_MUTED, font=Fonts.BODY)
-            self.btn_tab_pareceres.configure(fg_color=Colors.BG_INPUT, text_color=Colors.TEXT_MAIN, font=Fonts.BODY_BOLD)
+    def mostrar_principal(self) -> None:
+        from src.ui.views.principal import PrincipalView
 
-    def show_demandas_list(self):
-        """Switch to Demandas List View."""
-        self._clear_content()
-        self._update_tab_buttons("demandas")
-        from src.ui.views.demandas_list import DemandasListView
-        self.current_view = DemandasListView(self.content_container, app=self)
-        self.current_view.pack(fill="both", expand=True)
+        self._trocar_tela(PrincipalView(self, app=self))
 
-    def show_demanda_form(self, demanda_data=None):
-        """Switch to Demanda Form View (New/Edit)."""
-        self._clear_content()
-        self._update_tab_buttons("demandas")
-        from src.ui.views.demanda_form import DemandaFormView
-        self.current_view = DemandaFormView(self.content_container, app=self, demanda_data=demanda_data)
-        self.current_view.pack(fill="both", expand=True)
+    def mostrar_configuracao(self, mensagem: str | None = None) -> None:
+        from src.ui.views.configuracao_banco import ConfiguracaoBancoView
 
-    def show_pareceres_list(self):
-        """Switch to Pareceres List View."""
-        self._clear_content()
-        self._update_tab_buttons("pareceres")
-        from src.ui.views.pareceres_list import PareceresListView
-        self.current_view = PareceresListView(self.content_container, app=self)
-        self.current_view.pack(fill="both", expand=True)
+        view = ConfiguracaoBancoView(self, app=self, mensagem=mensagem, pode_voltar=self.servicos is not None)
+        self._trocar_tela(view)
 
-    def show_parecer_form(self, parecer_data=None):
-        """Switch to Parecer Form View (New/Edit)."""
-        self._clear_content()
-        self._update_tab_buttons("pareceres")
-        from src.ui.views.parecer_form import ParecerFormView
-        self.current_view = ParecerFormView(self.content_container, app=self, parecer_data=parecer_data)
-        self.current_view.pack(fill="both", expand=True)
+    def fechar(self) -> None:
+        if self.servicos is not None:
+            self.servicos.fechar()
+        self.destroy()
 
-if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+
+def main() -> None:
+    App().mainloop()

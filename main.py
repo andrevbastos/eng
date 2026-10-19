@@ -1,16 +1,10 @@
 """
-Entry point de teste para abrir a interface CustomTkinter.
+Ponto de entrada da aplicação (também usado pelo PyInstaller).
 
 Uso, a partir do diretório eng/:
     uv run main.py
 """
-from src.ui.app import App
-
-
-def main():
-    app = App()
-    app.mainloop()
-
+from src.ui.app import main
 
 if __name__ == "__main__":
     main()
