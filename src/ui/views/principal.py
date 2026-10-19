@@ -2,12 +2,15 @@
 Janela principal em abas (RS012): cada aba tem a lista de resultados à
 esquerda e o painel de detalhes à direita, na mesma janela.
 
-Esqueleto da sessão 3: a lista, a pesquisa e o painel de detalhes são
-preenchidos nas sessões 4 e 5.
+A pesquisa com filtros e a paginação entram na sessão 5.
 """
 import customtkinter as ctk
 
 from src.ui.theme import Colors, Fonts
+from src.ui.views.aba import AbaBase
+from src.ui.views.demandas import AbaDemandas
+from src.ui.views.pareceres import AbaPareceres
+from src.ui.widgets import configurar_estilo_lista
 
 ABAS = (("demandas", "Demandas"), ("pareceres", "Pareceres"))
 MAX_CARACTERES_CAMINHO = 60
@@ -26,15 +29,16 @@ class PrincipalView(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
         self.app = app
         self.botoes_aba: dict[str, ctk.CTkButton] = {}
-        self.abas: dict[str, AbaView] = {}
+        self.abas: dict[str, AbaBase] = {}
         self.aba_ativa: str | None = None
 
+        configurar_estilo_lista(self)
         self._build_header()
         self.conteudo = ctk.CTkFrame(self, fg_color=Colors.BG_APP, corner_radius=0)
         self.conteudo.pack(fill="both", expand=True, padx=16, pady=12)
 
-        self.abas["demandas"] = AbaView(self.conteudo, titulo_lista="DEMANDAS CADASTRADAS", servico=app.servicos.demandas)
-        self.abas["pareceres"] = AbaView(self.conteudo, titulo_lista="PARECERES CADASTRADOS", servico=app.servicos.pareceres)
+        self.abas["demandas"] = AbaDemandas(self.conteudo, app)
+        self.abas["pareceres"] = AbaPareceres(self.conteudo, app)
         self.mostrar_aba("demandas")
 
     def _build_header(self):
@@ -109,7 +113,7 @@ class PrincipalView(ctk.CTkFrame):
             self.abas[self.aba_ativa].pack_forget()
         self.aba_ativa = chave
         self.abas[chave].pack(fill="both", expand=True)
-        self.abas[chave].atualizar()
+        self.abas[chave].atualizar_lista()
         for outra, botao in self.botoes_aba.items():
             ativa = outra == chave
             botao.configure(
@@ -117,45 +121,3 @@ class PrincipalView(ctk.CTkFrame):
                 text_color=Colors.TEXT_MAIN if ativa else Colors.TEXT_MUTED,
                 font=Fonts.BODY_BOLD if ativa else Fonts.BODY,
             )
-
-
-class AbaView(ctk.CTkFrame):
-    """Lista à esquerda e painel de detalhes à direita (RS012)."""
-
-    def __init__(self, parent, titulo_lista: str, servico):
-        super().__init__(parent, fg_color="transparent")
-        self.titulo_lista = titulo_lista
-        self.servico = servico
-
-        self.grid_columnconfigure(0, weight=5, uniform="colunas")
-        self.grid_columnconfigure(1, weight=6, uniform="colunas")
-        self.grid_rowconfigure(0, weight=1)
-
-        self.lista = _cartao(self)
-        self.lista.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self.lbl_lista = ctk.CTkLabel(
-            self.lista, text="", font=Fonts.SECTION_HEADER, text_color=Colors.TEXT_MUTED
-        )
-        self.lbl_lista.pack(anchor="w", padx=14, pady=(12, 6))
-
-        self.detalhes = _cartao(self)
-        self.detalhes.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        ctk.CTkLabel(
-            self.detalhes,
-            text="Selecione um item na lista para ver os detalhes.",
-            font=Fonts.BODY,
-            text_color=Colors.TEXT_MUTED,
-        ).place(relx=0.5, rely=0.5, anchor="center")
-
-    def atualizar(self) -> None:
-        self.lbl_lista.configure(text=f"{self.titulo_lista} ({len(self.servico.listar())})")
-
-
-def _cartao(parent) -> ctk.CTkFrame:
-    return ctk.CTkFrame(
-        parent,
-        fg_color=Colors.BG_CARD,
-        border_color=Colors.BORDER_SUBTLE,
-        border_width=1,
-        corner_radius=8,
-    )
