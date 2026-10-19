@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessoria Jurídica IFC - Banco de Pareceres</title>
+<style>
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --border-radius-lg: 12px;
+  --border-radius-md: 8px;
+  --border-radius-sm: 6px;
+  --bg-body: #2c2f33;
+  --bg-app: #1a1d21;
+  --bg-titlebar: #13161a;
+  --bg-input: #252930;
+  --bg-card: #13161a;
+  --bg-btn-sec: #2e333b;
+  --bg-btn-sec-hover: #363b44;
+  --accent-blue: #3d7ef8;
+  --accent-blue-hover: #5590ff;
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --text-dim: rgba(255, 255, 255, 0.25);
+  --text-main: rgba(255, 255, 255, 0.85);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-body);
+  padding: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  color: var(--text-main);
+}
+.app {
+  background: var(--bg-app);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  min-height: 640px;
+  width: 920px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+  border: 0.5px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+}
+.titlebar {
+  background: var(--bg-titlebar);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.07);
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.titlebar-title {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  margin-left: auto;
+  margin-right: auto;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+.content {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+/* Nav Tabs */
+.nav-tabs {
+  display: flex;
+  gap: 6px;
+  background: #13161a;
+  padding: 4px;
+  border-radius: 8px;
+  border: 0.5px solid rgba(255,255,255,0.06);
+  width: fit-content;
+}
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+.tab-btn:hover { color: #fff; background: rgba(255,255,255,0.04); }
+.tab-btn.active {
+  background: var(--bg-input);
+  color: #fff;
+  border: 0.5px solid rgba(255,255,255,0.1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* Dynamic Search Bar */
+.search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #13161a;
+  padding: 14px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--border-subtle);
+}
+.search-main-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.search-input-wrap {
+  position: relative;
+  flex: 1;
+}
+.search-input-wrap input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 12px 8px 32px;
+  font-size: 12px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+}
+.search-input-wrap input:focus { border-color: var(--accent-blue); }
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  opacity: 0.4;
+}
+
+/* Dynamic Filter Button & Chips */
+.btn-filter-add {
+  background: var(--bg-btn-sec);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 14px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.btn-filter-add:hover { background: var(--bg-btn-sec-hover); color: #fff; }
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.filter-chip {
+  background: rgba(61,126,248,0.12);
+  border: 0.5px solid rgba(61,126,248,0.3);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #82b1ff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-chip .close-btn {
+  cursor: pointer;
+  opacity: 0.6;
+  font-weight: bold;
+}
+.filter-chip .close-btn:hover { opacity: 1; color: #fff; }
+
+/* Filter Dropdown Popover */
+.filter-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: #1a1d21;
+  border: 0.5px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 10px;
+  width: 220px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+}
+.filter-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+.filter-menu-item select, .filter-menu-item input {
+  background: var(--bg-input);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: #fff;
+  outline: none;
+}
+
+/* Action Bar above Table */
+.table-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.btn-primary {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 7px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  transition: background 0.15s ease;
+}
+.btn-primary:hover { background: var(--accent-blue-hover); }
+
+/* Table View */
+.table-wrap {
+  border: 0.5px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.table-head {
+  display: grid;
+  grid-template-columns: 2.5fr 3fr 1.2fr 1.5fr;
+  background: var(--bg-titlebar);
+  padding: 9px 14px;
+  border-bottom: 0.5px solid rgba(255,255,255,0.05);
+}
+.table-head span {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.table-body { min-height: 220px; max-height: 280px; overflow-y: auto; background: var(--bg-app); }
+.table-row {
+  display: grid;
+  grid-template-columns: 2.5fr 3fr 1.2fr 1.5fr;
+  padding: 11px 14px;
+  border-top: 0.5px solid rgba(255,255,255,0.04);
+  align-items: center;
+  font-size: 12px;
+  transition: background 0.10s ease;
+}
+.table-row:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
+
+/* Badges & Tags */
+.tag-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+.tag-parecer { background: rgba(40, 200, 64, 0.2); color: #81c784; border: 0.5px solid rgba(40, 200, 64, 0.3); }
+.tag-licitacao { background: rgba(61, 126, 248, 0.2); color: #82b1ff; border: 0.5px solid rgba(61, 126, 248, 0.3); }
+
+/* Double-click Hint Footer */
+.table-footer-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px;
+}
+
+/* SCREEN VIEW STATES */
+.view-screen { display: none; flex-direction: column; gap: 14px; }
+.view-screen.active { display: flex; }
+
+/* Detail Screen & Form Styles */
+.back-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #13161a;
+  padding: 10px 14px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--border-subtle);
+}
+.btn-back {
+  background: var(--bg-btn-sec);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-back:hover { background: var(--bg-btn-sec-hover); color: #fff; }
+
+.detail-card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.detail-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 0.5px solid rgba(255,255,255,0.06);
+  padding-bottom: 12px;
+}
+.detail-item-title { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+.detail-meta-text { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+.detail-grid-2x2 {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-rows: auto auto;
+  gap: 14px;
+}
+.sub-panel {
+  background: #1a1d21;
+  border: 0.5px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.sub-panel-title {
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.5);
+  margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+}
+.scrollable-box {
+  max-height: 135px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.scrollable-box::-webkit-scrollbar { width: 5px; }
+.scrollable-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.obs-textarea {
+  width: 100%;
+  height: 125px;
+  background: #252930;
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.4;
+}
+.obs-textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(61,126,248,0.15);
+}
+
+.doc-box {
+  background: #252930;
+  padding: 6px 10px;
+  border-radius: 50px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+
+/* FORM ROLÁVEL DE PARECER */
+.form-card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.form-card::-webkit-scrollbar { width: 6px; }
+.form-card::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: 3fr 1.2fr;
+  gap: 14px;
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.field input, .field select, .field textarea {
+  background: var(--bg-input);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #fff;
+  outline: none;
+  font-family: inherit;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent-blue); }
+.btn-browse {
+  background: var(--bg-btn-sec);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: var(--border-radius-sm);
+  padding: 0 14px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-browse:hover { background: var(--bg-btn-sec-hover); color: #fff; }
+.tag-selector-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: var(--bg-input);
+  padding: 8px 10px;
+  border-radius: var(--border-radius-sm);
+  border: 0.5px solid rgba(255,255,255,0.12);
+}
+.tag-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.tag-option input { margin: 0; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="dot" style="background:#ff5f57"></div>
+    <div class="dot" style="background:#ffbd2e"></div>
+    <div class="dot" style="background:#28c840"></div>
+    <span class="titlebar-title">Assessoria Jurídica IFC - Banco de Pareceres</span>
+  </div>
+
+  <div class="content">
+
+    <!-- Nav Tabs -->
+    <div class="nav-tabs">
+      <a href="mockup_pesquisa_demandas.html" class="tab-btn">Demandas Jurídicas</a>
+      <a href="mockup_pesquisa_pareceres.html" class="tab-btn active">Pareceres da Procuradoria</a>
+    </div>
+
+    <!-- TELA 1: LISTA E PESQUISA DE PARECERES -->
+    <div class="view-screen active" id="screen-list">
+      
+      <!-- Pesquisa Dinâmica -->
+      <div class="search-section">
+        <div class="section-label">Pesquisa no Banco de Pareceres</div>
+        <div class="search-main-row">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" placeholder="Pesquisar por assunto ou conclusão jurídica anterior..." value="Dispensa de Licitação">
+          </div>
+          
+          <div style="position: relative;">
+            <button class="btn-filter-add" onclick="toggleFilterMenu()">
+              <span>+ Adicionar Filtro</span>
+              <span style="font-size: 9px; opacity: 0.5;">▼</span>
+            </button>
+            
+            <div class="filter-menu" id="filter-popover">
+              <div class="filter-menu-item">
+                <label>Filtrar por Tag</label>
+                <select onchange="addFilterChip('Tag: ' + this.value); closeFilterMenu()">
+                  <option value="">Selecione...</option>
+                  <option>Licitação</option>
+                  <option>Contrato</option>
+                  <option>Pessoal</option>
+                </select>
+              </div>
+              <div class="filter-menu-item">
+                <label>Ano do Parecer</label>
+                <select onchange="addFilterChip('Ano: ' + this.value); closeFilterMenu()">
+                  <option value="">Selecione...</option>
+                  <option>2026</option>
+                  <option>2025</option>
+                  <option>2024</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="active-filters" id="chip-container">
+          <span style="font-size: 11px; color: rgba(255,255,255,0.3); margin-right: 4px;">Filtros aplicados:</span>
+          <div class="filter-chip">
+            <span>Tag: Licitação</span>
+            <span class="close-btn" onclick="this.parentElement.remove()">✕</span>
+          </div>
+          <div class="filter-chip">
+            <span>Ano: 2026</span>
+            <span class="close-btn" onclick="this.parentElement.remove()">✕</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Ações sobre a Tabela -->
+      <div class="table-action-bar">
+        <span class="section-label" style="margin:0">Pareceres Encontrados (2)</span>
+        <button class="btn-primary" onclick="openFormScreen('Cadastrar Novo Parecer')">
+          <span style="font-size: 14px;">+</span> Novo Parecer
+        </button>
+      </div>
+
+      <!-- Tabela de Pareceres -->
+      <div class="table-wrap">
+        <div class="table-head">
+          <span>Assunto do Parecer</span>
+          <span>Conclusão Jurídica Resumida</span>
+          <span>Data Emissão</span>
+          <span>Tags</span>
+        </div>
+        <div class="table-body">
+          <div class="table-row" ondblclick="openDetailScreen('Dispensa para Obra de Pesquisa', 'DEFERIDO', 'Possibilidade jurídica de contratação direta com base no Art. 75, inciso IV da Lei 14.133/21.', '15/05/2026')">
+            <span style="font-weight: 500; color: #fff;">Dispensa para Obra de Pesquisa</span>
+            <span>Possibilidade jurídica com base no Art. 75...</span>
+            <span>15/05/2026</span>
+            <span><span class="tag-pill tag-licitacao">Licitação</span><span class="tag-pill tag-parecer">Deferido</span></span>
+          </div>
+          <div class="table-row" ondblclick="openDetailScreen('Reajuste Contratual de TI', 'INDEFERIDO', 'Ausência de preclusão lógica e requisitos formais para concessão do reajuste extemporâneo.', '02/03/2026')">
+            <span style="font-weight: 500; color: #fff;">Reajuste Contratual de TI</span>
+            <span>Ausência de requisitos formais para o reajuste...</span>
+            <span>02/03/2026</span>
+            <span><span class="tag-pill tag-licitacao">Contrato</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-footer-hint">
+        <span>Clique duas vezes para abrir o parecer.</span>
+        <span>Página 1 de 1</span>
+      </div>
+
+    </div>
+
+    <!-- TELA 2: DETALHES DO PARECER -->
+    <div class="view-screen" id="screen-detail">
+      <div class="back-bar">
+        <button class="btn-back" onclick="showListScreen()">← Voltar para a Pesquisa de Pareceres</button>
+      </div>
+
+      <div class="detail-card">
+        <div class="detail-header-row">
+          <div>
+            <div class="detail-item-title" id="det-title">Dispensa para Obra de Pesquisa</div>
+            <div class="detail-meta-text">
+              Emissão: <span id="det-data">15/05/2026</span> | Emissor: Procuradoria Federal / IFC
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-back" style="padding: 4px 12px; font-size: 11px;" onclick="openFormScreen('Editar Parecer')">Editar Parecer</button>
+          </div>
+        </div>
+
+        <div class="detail-grid-2x2">
+          <div class="sub-panel">
+            <div class="sub-panel-title">
+              <span>ASSUNTO</span>
+            </div>
+            <div class="scrollable-box">
+              <p style="font-size: 12px; color: rgba(255,255,255,0.8); line-height: 1.5;">
+                Análise de legalidade para contratação direta por dispensa de licitação para aquisição de insumos de laboratório de pesquisa em biotecnologia.
+              </p>
+            </div>
+          </div>
+
+          <div class="sub-panel">
+            <div class="sub-panel-title">
+              <span>OBSERVAÇÕES</span>
+            </div>
+            <textarea class="obs-textarea" placeholder="Digite observações aqui...">Parecer de referência para futuras contratações com a mesma justificativa técnica.</textarea>
+          </div>
+
+          <div class="sub-panel">
+            <div class="sub-panel-title">
+              <span>CONCLUSÃO</span>
+            </div>
+            <div class="scrollable-box">
+              <p style="font-size: 11px; color: #81c784; background: rgba(40, 200, 64, 0.08); padding: 10px; border-radius: 6px; border: 0.5px solid rgba(40, 200, 64, 0.2);" id="det-conclusao">
+                DEFERIDO: Opina-se pela viabilidade jurídica da contratação, desde que instruída com a justificativa de preço e fornecedor exclusivo.
+              </p>
+            </div>
+          </div>
+
+          <div class="sub-panel">
+            <div class="sub-panel-title">
+              <span>DOCUMENTOS</span>
+              <button class="btn-filter-add" style="padding: 2px 8px; font-size: 10px;">+ Anexar</button>
+            </div>
+            <div class="scrollable-box">
+              <div class="doc-box">
+                <span style="color: var(--accent-blue); font-weight: bold;">PDF</span> parecer_procuradoria_012.pdf
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TELA 3: FORMULÁRIO ROLÁVEL DE ADIÇÃO E EDIÇÃO DO PARECER -->
+    <div class="view-screen" id="screen-form">
+      <div class="back-bar">
+        <button class="btn-back" onclick="showListScreen()">← Cancelar e Voltar</button>
+        <span style="font-size: 14px; font-weight: 600; color: #fff;" id="form-title">Cadastrar Novo Parecer</span>
+        <button class="btn-primary" onclick="alert('Parecer salvo com sucesso!'); showListScreen();">Salvar Parecer</button>
+      </div>
+
+      <div class="form-card">
+        <div class="section-label">Dados do Parecer da Procuradoria</div>
+        <div class="form-grid-2col">
+          <div class="field">
+            <label>Assunto do Parecer *</label>
+            <input type="text" placeholder="Ex: Dispensa de licitação para contratação direta de insumos..." value="Dispensa para Obra de Pesquisa">
+          </div>
+          <div class="field">
+            <label>Data de Emissão *</label>
+            <input type="date" value="2026-05-15">
+          </div>
+        </div>
+
+        <div class="section-label" style="margin-top: 6px;">Conclusão Jurídica</div>
+        <div class="field">
+          <label>Conclusão / Fundamentação *</label>
+          <textarea style="height: 100px;" placeholder="Descreva o parecer e a fundamentação legal...">DEFERIDO: Opina-se pela viabilidade jurídica da contratação direta com base no Art. 75, inciso IV da Lei 14.133/21, desde que instruída com a devida justificativa de preço e exclusividade.</textarea>
+        </div>
+
+        <div class="section-label" style="margin-top: 6px;">Tags e Observações</div>
+        <div class="field">
+          <label>Tags de Organização</label>
+          <div class="tag-selector-row">
+            <label class="tag-option tag-licitacao"><input type="checkbox" checked> Licitação</label>
+            <label class="tag-option tag-parecer"><input type="checkbox" checked> Deferido</label>
+            <button type="button" class="btn-browse" style="padding: 2px 8px; font-size: 10px;" onclick="alert('Criar nova tag...')">+ Nova Tag</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Observações</label>
+          <textarea style="height: 70px;" placeholder="Anotações internas...">Parecer de referência para futuras contratações com a mesma justificativa técnica.</textarea>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function toggleFilterMenu() {
+  const pop = document.getElementById('filter-popover');
+  pop.style.display = (pop.style.display === 'flex') ? 'none' : 'flex';
+}
+function closeFilterMenu() {
+  document.getElementById('filter-popover').style.display = 'none';
+}
+function addFilterChip(text) {
+  const container = document.getElementById('chip-container');
+  const chip = document.createElement('div');
+  chip.className = 'filter-chip';
+  chip.innerHTML = `<span>${text}</span><span class="close-btn" onclick="this.parentElement.remove()">✕</span>`;
+  container.appendChild(chip);
+}
+
+/* Transição de Estado da Tela */
+function hideAllScreens() {
+  document.querySelectorAll('.view-screen').forEach(s => s.classList.remove('active'));
+}
+
+function openDetailScreen(title, badgeText, conclusao, data) {
+  document.getElementById('det-title').innerText = title;
+  document.getElementById('det-conclusao').innerText = conclusao;
+  document.getElementById('det-data').innerText = data;
+  
+  hideAllScreens();
+  document.getElementById('screen-detail').classList.add('active');
+}
+
+function openFormScreen(formTitle) {
+  document.getElementById('form-title').innerText = formTitle;
+  hideAllScreens();
+  document.getElementById('screen-form').classList.add('active');
+}
+
+function showListScreen() {
+  hideAllScreens();
+  document.getElementById('screen-list').classList.add('active');
+}
+</script>
+
+</body>
+</html>
