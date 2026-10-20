@@ -30,3 +30,10 @@ def test_encurtar_caminho_longo_do_banco():
     assert len(curto) == 40
     assert curto.startswith(r"\\servidor") and curto.endswith("assessoria.db")
     assert encurtar_meio("C:/a.db", 40) == "C:/a.db"
+
+
+def test_rs013_paleta_de_tags_legivel():
+    from src.ui.widgets import PALETA_TAGS
+
+    for cor in PALETA_TAGS:
+        assert contraste(texto_sobre(cor), cor) >= CONTRASTE_MINIMO, cor

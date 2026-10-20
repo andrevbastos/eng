@@ -2,6 +2,7 @@
 Componentes reutilizáveis da interface: campos de formulário (RS017),
 cabeçalhos de seção, chips de tag e o estilo escuro da lista (RS013).
 """
+import re
 from tkinter import filedialog, ttk
 from typing import Any, Callable
 
@@ -12,6 +13,7 @@ from src.ui.theme import Colors, Fonts, texto_sobre
 
 OBRIGATORIO = "Campo obrigatório."
 DATA_INVALIDA = "Data inválida. Use DD/MM/AAAA."
+COR_HEX = re.compile(r"#[0-9A-Fa-f]{6}")
 
 
 class Campo(ctk.CTkFrame):
@@ -152,6 +154,43 @@ class CampoData(CampoTexto):
 
     def definir(self, valor: Any) -> None:
         self.entrada.definir(data_br(valor))
+
+
+# Cores sugeridas para tags (RS006); todas têm texto legível por texto_sobre().
+PALETA_TAGS = (
+    "#EF5350", "#FFB74D", "#FACC15", "#66BB6A", "#26A69A", "#29B6F6",
+    "#3A7BD5", "#7E57C2", "#EC407A", "#8D6E63", "#78909C", "#A3ACB7",
+)
+
+
+class CampoCor(CampoTexto):
+    """Cor hexadecimal #RRGGBB, digitada ou escolhida na paleta, com prévia da tag."""
+
+    placeholder = "#RRGGBB"
+
+    def _criar_widget(self):
+        linha = ctk.CTkFrame(self, fg_color="transparent")
+        self.entrada = Entrada(linha, ao_mudar=self._mudou, placeholder_text=self.placeholder, width=110)
+        self.entrada.pack(side="left", padx=(0, 8))
+        for cor in PALETA_TAGS:
+            ctk.CTkButton(
+                linha, text="", width=22, height=22, corner_radius=11, fg_color=cor, hover_color=cor,
+                border_width=0, command=lambda cor=cor: self.entrada.definir(cor),
+            ).pack(side="left", padx=2)
+        self.previa = ctk.CTkLabel(linha, text="", font=Fonts.BADGE, corner_radius=8, height=20)
+        self.previa.pack(side="left", padx=(10, 0))
+        return linha
+
+    def _pintar_borda(self, cor: str) -> None:
+        self.entrada.configure(border_color=cor)
+
+    def _mudou(self, *args):
+        super()._mudou(*args)
+        cor = self.texto().strip()
+        if COR_HEX.fullmatch(cor):
+            self.previa.configure(text="  Prévia  ", fg_color=cor, text_color=texto_sobre(cor))
+        else:
+            self.previa.configure(text="", fg_color="transparent")
 
 
 class CampoTextoLongo(Campo):
@@ -412,6 +451,19 @@ def badge(parent, texto: str) -> ctk.CTkLabel:
         corner_radius=8,
         height=22,
     )
+
+
+CORES_PRAZO = {
+    "proxima": (Colors.PRAZO_PROXIMO_BG, Colors.PRAZO_PROXIMO_FG),
+    "vencida": (Colors.PRAZO_VENCIDO_BG, Colors.PRAZO_VENCIDO_FG),
+}
+
+
+def badge_prazo(parent, situacao: str, texto: str) -> ctk.CTkLabel:
+    """Alerta de prazo (RS019): amarelo se próximo, vermelho se vencido."""
+    fundo, cor = CORES_PRAZO[situacao]
+    return ctk.CTkLabel(parent, text=f"  {texto}  ", font=Fonts.BADGE, fg_color=fundo, text_color=cor,
+                        corner_radius=8, height=22)
 
 
 ESTILO_LISTA = "Lista.Treeview"

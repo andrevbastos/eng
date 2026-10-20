@@ -2,17 +2,19 @@
 Janela principal em abas (RS012): cada aba tem a lista de resultados à
 esquerda e o painel de detalhes à direita, na mesma janela.
 
-A pesquisa com filtros e a paginação entram na sessão 5.
+A aba Tags reúne o cadastro de tags (RF005). Ao abrir, uma faixa abaixo do
+cabeçalho mostra o total de demandas próximas do prazo e vencidas (RS019, RF015).
 """
 import customtkinter as ctk
 
+from src.services import ServicoError
 from src.ui.theme import Colors, Fonts
-from src.ui.views.aba import AbaBase
 from src.ui.views.demandas import AbaDemandas
 from src.ui.views.pareceres import AbaPareceres
-from src.ui.widgets import configurar_estilo_lista
+from src.ui.views.tags import TelaTags
+from src.ui.widgets import badge_prazo, botao, configurar_estilo_lista
 
-ABAS = (("demandas", "Demandas"), ("pareceres", "Pareceres"))
+ABAS = (("demandas", "Demandas"), ("pareceres", "Pareceres"), ("tags", "Tags"))
 MAX_CARACTERES_CAMINHO = 60
 
 
@@ -29,17 +31,54 @@ class PrincipalView(ctk.CTkFrame):
         super().__init__(parent, fg_color="transparent")
         self.app = app
         self.botoes_aba: dict[str, ctk.CTkButton] = {}
-        self.abas: dict[str, AbaBase] = {}
+        self.abas: dict[str, ctk.CTkFrame] = {}
         self.aba_ativa: str | None = None
+        self.alerta_fechado = False
 
         configurar_estilo_lista(self)
         self._build_header()
+        # A faixa de prazos só ocupa espaço quando há o que avisar.
+        self.area_alerta = ctk.CTkFrame(self, fg_color="transparent", height=1)
+        self.area_alerta.pack(fill="x")
+        self.alerta = ctk.CTkFrame(self.area_alerta, fg_color=Colors.BG_HEADER, corner_radius=0)
         self.conteudo = ctk.CTkFrame(self, fg_color=Colors.BG_APP, corner_radius=0)
         self.conteudo.pack(fill="both", expand=True, padx=16, pady=12)
 
         self.abas["demandas"] = AbaDemandas(self.conteudo, app)
         self.abas["pareceres"] = AbaPareceres(self.conteudo, app)
+        self.abas["tags"] = TelaTags(self.conteudo, app)
+        # Salvar, editar ou excluir uma demanda atualiza a lista e, com ela, a contagem.
+        self.abas["demandas"].ao_atualizar = self.atualizar_alerta
         self.mostrar_aba("demandas")
+
+    # --- Alerta de prazos (RS019, RF015) ------------------------------------------
+
+    def atualizar_alerta(self) -> None:
+        for filho in self.alerta.winfo_children():
+            filho.destroy()
+        try:
+            contagem = self.app.servicos.demandas.contar_prazos()
+        except ServicoError:
+            return
+        self.contagem_prazos = contagem
+        if self.alerta_fechado or not (contagem.vencidas or contagem.proximas):
+            self.alerta.pack_forget()
+            return
+        interno = ctk.CTkFrame(self.alerta, fg_color="transparent")
+        interno.pack(fill="x", padx=16, pady=6)
+        ctk.CTkLabel(interno, text="Prazos:", font=Fonts.BODY_BOLD, text_color=Colors.TEXT_MAIN).pack(side="left", padx=(0, 8))
+        self.lbl_vencidas = badge_prazo(interno, "vencida", f"{contagem.vencidas} vencida(s)")
+        self.lbl_proximas = badge_prazo(interno, "proxima", f"{contagem.proximas} vencendo em até 5 dias")
+        self.lbl_vencidas.pack(side="left", padx=(0, 6))
+        self.lbl_proximas.pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(interno, text="Demandas destacadas na lista com as mesmas cores.", font=Fonts.SMALL,
+                     text_color=Colors.TEXT_MUTED).pack(side="left")
+        botao(interno, "Fechar", self.fechar_alerta, width=70, height=24, font=Fonts.SMALL).pack(side="right")
+        self.alerta.pack(fill="x")
+
+    def fechar_alerta(self) -> None:
+        self.alerta_fechado = True
+        self.alerta.pack_forget()
 
     def _build_header(self):
         header = ctk.CTkFrame(

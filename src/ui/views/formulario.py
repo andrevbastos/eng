@@ -15,7 +15,7 @@ from src.services import ServicoError, ValidacaoError
 from src.ui.formatos import ROTULOS_CAMPOS
 from src.ui.theme import Colors, Fonts
 from src.ui.widgets import (
-    Campo, CampoBooleano, CampoData, CampoOpcoes, CampoPasta, CampoTexto, CampoTextoLongo, botao,
+    Campo, CampoBooleano, CampoCor, CampoData, CampoOpcoes, CampoPasta, CampoTexto, CampoTextoLongo, botao,
 )
 
 TIPOS = {
@@ -25,6 +25,7 @@ TIPOS = {
     "opcoes": CampoOpcoes,
     "booleano": CampoBooleano,
     "pasta": CampoPasta,
+    "cor": CampoCor,
 }
 
 
