@@ -9,10 +9,14 @@ import customtkinter as ctk
 
 from src.ui.formatos import data_hora_br, descrever_alteracao
 from src.ui.theme import Colors, Fonts
-from src.ui.widgets import badge, botao, chip_tag, titulo_secao
+from src.ui.widgets import badge, badge_prazo, botao, chip_tag, titulo_secao
 
 LARGURA_TEXTO = 620
 VAZIO = "—"
+
+
+def _encurtar(texto: str, maximo: int) -> str:
+    return texto if len(texto) <= maximo else texto[: maximo - 1] + "…"
 
 
 class DetalheBase(ctk.CTkScrollableFrame):
@@ -26,6 +30,7 @@ class DetalheBase(ctk.CTkScrollableFrame):
         etiquetas: list[str],
         ao_editar: Callable,
         ao_excluir: Callable,
+        prazo: tuple[str, str] | None = None,
     ) -> None:
         topo = ctk.CTkFrame(self, fg_color="transparent")
         topo.pack(fill="x", padx=10, pady=(10, 4))
@@ -46,6 +51,8 @@ class DetalheBase(ctk.CTkScrollableFrame):
             linha.pack(fill="x", pady=(6, 0))
             for texto in etiquetas:
                 badge(linha, texto).pack(side="left", padx=(0, 6))
+            if prazo:
+                badge_prazo(linha, *prazo).pack(side="left", padx=(0, 6))
 
     def secao(self, titulo: str, acao: tuple[str, Callable] | None = None) -> ctk.CTkFrame:
         """Sub-painel com título e conteúdo, no estilo dos mockups."""
@@ -91,20 +98,44 @@ class DetalheBase(ctk.CTkScrollableFrame):
             chip_tag(linha, tag.nome, tag.cor).pack(side="left", padx=(0, 6))
 
     @staticmethod
-    def documentos(conteudo, documentos) -> None:
+    def documentos(conteudo, documentos, aba) -> None:
+        """Cada anexo com "Abrir" e, se houver link, "Abrir no Drive" (RS020, RF011, RNF007)."""
         if not documentos:
             DetalheBase.texto(conteudo, "Nenhum documento anexado.")
             return
-        for documento in documentos:
+        for documento in sorted(documentos, key=lambda d: d.id):
             caixa = ctk.CTkFrame(conteudo, fg_color=Colors.BG_INPUT, corner_radius=6)
             caixa.pack(fill="x", pady=(0, 4))
-            ctk.CTkLabel(caixa, text=documento.tipo_arquivo.upper(), font=Fonts.BADGE,
-                         text_color=Colors.TEXT_MUTED, width=44).pack(side="left", padx=(8, 4), pady=6)
+            topo = ctk.CTkFrame(caixa, fg_color="transparent")
+            topo.pack(fill="x", padx=8, pady=(6, 0))
+            ctk.CTkLabel(topo, text=documento.tipo_arquivo.upper(), font=Fonts.BADGE,
+                         text_color=Colors.TEXT_MUTED, width=40, anchor="w").pack(side="left")
             caminho = Path(documento.caminho_arquivo)
-            ctk.CTkLabel(caixa, text=caminho.name, font=Fonts.BODY, text_color=Colors.TEXT_MAIN,
-                         anchor="w").pack(side="left")
+
+            acoes = ctk.CTkFrame(topo, fg_color="transparent")
+            acoes.pack(side="right")
+            pequenos = dict(height=24, font=Fonts.SMALL)
+            botao(acoes, "Abrir", lambda d=documento: aba.abrir_documento(d), tipo="primario",
+                  width=60, **pequenos).pack(side="left", padx=(0, 4))
+            if documento.url_drive:
+                botao(acoes, "Abrir no Drive", lambda d=documento: aba.abrir_drive(d), tipo="primario",
+                      width=100, **pequenos).pack(side="left", padx=(0, 4))
+            botao(acoes, "Link", lambda d=documento: aba.editar_link(d), width=46,
+                  **pequenos).pack(side="left", padx=(0, 4))
+            botao(acoes, "Tags", lambda d=documento: aba.editar_tags_documento(d), width=46,
+                  **pequenos).pack(side="left", padx=(0, 4))
+            botao(acoes, "Remover", lambda d=documento: aba.remover_documento(d), tipo="perigo",
+                  width=64, **pequenos).pack(side="left")
+
+            ctk.CTkLabel(topo, text=_encurtar(caminho.name, 34), font=Fonts.BODY_BOLD,
+                         text_color=Colors.TEXT_MAIN, anchor="w").pack(side="left", fill="x", expand=True)
             ctk.CTkLabel(caixa, text=str(caminho.parent), font=Fonts.SMALL, text_color=Colors.TEXT_MUTED,
-                         anchor="w").pack(side="left", padx=(10, 8), fill="x", expand=True)
+                         anchor="w", justify="left", wraplength=LARGURA_TEXTO - 40).pack(fill="x", padx=(48, 8))
+            if documento.tags:
+                linha = ctk.CTkFrame(caixa, fg_color="transparent")
+                linha.pack(fill="x", padx=(48, 8), pady=(2, 0))
+                DetalheBase.tags(linha, documento.tags)
+            ctk.CTkFrame(caixa, fg_color="transparent", height=6).pack()
 
     @staticmethod
     def historico(conteudo, tabela: str, itens) -> None:

@@ -7,18 +7,28 @@ Acima da lista ficam a pesquisa por texto e os filtros (RF006–RF008); abaixo,
 a paginação de 50 itens (RS018, RF009).
 """
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import customtkinter as ctk
 
-from src.services import ServicoError
+from src.models import EXTENSOES_PERMITIDAS
+from src.services import ServicoError, ValidacaoError
 from src.services.pesquisa import Pagina
+from src.ui import sistema
 from src.ui.theme import Colors, Fonts
-from src.ui.widgets import ESTILO_LISTA, Entrada, botao
+from src.ui.views.formulario import Especificacao, FormularioView
+from src.ui.views.tags import SeletorTags
+from src.ui.widgets import CORES_PRAZO, ESTILO_LISTA, Entrada, botao
 
 NENHUM_RESULTADO = "Nenhum resultado encontrado"
 ESPERA_DIGITACAO_MS = 250
+TIPOS_ACEITOS = [
+    ("Documentos aceitos", " ".join(f"*.{e} *.{e.upper()}" for e in EXTENSOES_PERMITIDAS)),
+    ("Todos os arquivos", "*.*"),
+]
+LINHAS_LINK = [[Especificacao("url_drive", rotulo="Link do Drive (https://...)")]]
 
 
 @dataclass
@@ -46,6 +56,8 @@ class AbaBase(ctk.CTkFrame):
         self.pagina = 1
         self.filtros: list = []
         self._pesquisa_agendada = None
+        # Chamado depois de cada atualização da lista (ex.: alerta de prazos).
+        self.ao_atualizar: Callable[[], None] | None = None
 
         self.grid_columnconfigure(0, weight=5, uniform="colunas")
         self.grid_columnconfigure(1, weight=6, uniform="colunas")
@@ -95,6 +107,8 @@ class AbaBase(ctk.CTkFrame):
         barra = ctk.CTkScrollbar(moldura, orientation="vertical", command=self.lista.yview,
                                  button_color=Colors.BG_BTN_SEC, button_hover_color=Colors.BG_BTN_SEC_HOVER)
         self.lista.configure(yscrollcommand=barra.set)
+        for situacao, (fundo, cor) in CORES_PRAZO.items():
+            self.lista.tag_configure(situacao, background=fundo, foreground=cor)
         barra.pack(side="right", fill="y")
         self.lista.pack(side="left", fill="both", expand=True)
 
@@ -177,7 +191,8 @@ class AbaBase(ctk.CTkFrame):
         self.pagina = resultado.pagina
         self.lista.delete(*self.lista.get_children())
         for registro in resultado.itens:
-            self.lista.insert("", "end", iid=str(registro.id), values=self.valores_linha(registro))
+            self.lista.insert("", "end", iid=str(registro.id), values=self.valores_linha(registro),
+                              tags=self.destaque_linha(registro))
         self.lbl_lista.configure(text=f"{self.titulo_lista} ({resultado.total})")
         self.lbl_pagina.configure(text=f"Página {resultado.pagina} de {resultado.total_paginas}")
         self.btn_anterior.configure(state="normal" if resultado.pagina > 1 else "disabled")
@@ -186,6 +201,8 @@ class AbaBase(ctk.CTkFrame):
         if selecionar is not None and self.lista.exists(str(selecionar)):
             self.lista.selection_set(str(selecionar))
             self.lista.see(str(selecionar))
+        if self.ao_atualizar:
+            self.ao_atualizar()
 
     def _mostrar_aviso_vazio(self, vazio: bool) -> None:
         if not vazio:
@@ -201,6 +218,10 @@ class AbaBase(ctk.CTkFrame):
 
     def valores_linha(self, registro) -> tuple:
         raise NotImplementedError
+
+    def destaque_linha(self, registro) -> tuple[str, ...]:
+        """Tags de estilo da linha (cores de prazo, RS019)."""
+        return ()
 
     def _abrir_selecionado(self, _evento=None):
         selecao = self.lista.selection()
@@ -259,6 +280,66 @@ class AbaBase(ctk.CTkFrame):
 
     def criar_formulario(self, registro_id: int | None):
         raise NotImplementedError
+
+    def recarregar_detalhe(self) -> None:
+        if self.registro_aberto is not None:
+            self.mostrar_detalhe(self.registro_aberto)
+
+    # --- Documentos (RF004, RF011, RS020, RS022) -------------------------------
+
+    def escolher_arquivo(self) -> str:
+        return filedialog.askopenfilename(title="Anexar documento", filetypes=TIPOS_ACEITOS, parent=self)
+
+    def anexar(self, **dono: int) -> None:
+        """dono: demanda_id, parecer_id ou subsidio_id."""
+        caminho = self.escolher_arquivo()
+        if not caminho:
+            return
+        try:
+            self.servicos.documentos.criar(caminho_arquivo=caminho, **dono)
+        except ValidacaoError as erro:
+            # RS022: formato fora do RD001 ou acima de 50 MB.
+            self.avisar("Documento recusado", f"{Path(caminho).name}\n\n" + "\n".join(erro.erros.values()))
+            return
+        except ServicoError as erro:
+            self.avisar("Não foi possível anexar", str(erro))
+            return
+        self.recarregar_detalhe()
+
+    def abrir_documento(self, documento) -> None:
+        try:
+            sistema.abrir_arquivo(documento.caminho_arquivo)
+        except FileNotFoundError:
+            self.avisar("Arquivo não encontrado",
+                        f"{documento.caminho_arquivo}\n\nO arquivo pode ter sido movido, renomeado ou apagado.")
+        except OSError as erro:
+            self.avisar("Não foi possível abrir", f"{documento.caminho_arquivo}\n\n{erro}")
+
+    def abrir_drive(self, documento) -> None:
+        sistema.abrir_url(documento.url_drive)
+
+    def editar_link(self, documento) -> None:
+        def salvar(dados):
+            self.servicos.documentos.editar(documento.id, **dados)
+            self.recarregar_detalhe()
+
+        self.trocar_painel(FormularioView(
+            self.painel, f"Link do Drive · {Path(documento.caminho_arquivo).name}", LINHAS_LINK, salvar,
+            self.recarregar_detalhe, {"url_drive": documento.url_drive}, texto_salvar="Salvar link",
+        ))
+
+    def remover_documento(self, documento) -> None:
+        self.excluir(self.servicos.documentos, documento.id, f"o anexo \"{Path(documento.caminho_arquivo).name}\"",
+                     "", 1, depois=self.recarregar_detalhe)
+
+    # --- Tags (RF005) -----------------------------------------------------------
+
+    def editar_tags(self, servico, registro, titulo: str) -> None:
+        self.trocar_painel(SeletorTags(self.painel, titulo, self.servicos, servico, registro.id,
+                                       {tag.id for tag in registro.tags}, self.recarregar_detalhe))
+
+    def editar_tags_documento(self, documento) -> None:
+        self.editar_tags(self.servicos.documentos, documento, f"Tags · {Path(documento.caminho_arquivo).name}")
 
     # --- Confirmações (substituíveis nos testes) -------------------------------
 

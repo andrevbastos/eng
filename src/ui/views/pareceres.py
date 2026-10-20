@@ -96,7 +96,9 @@ class DetalheParecer(DetalheBase):
         )
         self.texto(self.secao("Assunto"), parecer.assunto)
         self.texto(self.secao("Conclusão"), parecer.conclusao)
+        self.documentos(self.secao("Documentos", ("+ Anexar", lambda: aba.anexar(parecer_id=parecer.id))),
+                        parecer.documentos, aba)
+        self.tags(self.secao("Tags", ("Editar tags", lambda: aba.editar_tags(
+            aba.servicos.pareceres, parecer, f"Tags · parecer {parecer.numero}"))), parecer.tags)
         self.texto(self.secao("Observações"), parecer.observacoes)
-        self.tags(self.secao("Tags"), parecer.tags)
-        self.documentos(self.secao("Documentos"), parecer.documentos)
         self.historico(self.secao("Histórico de alterações"), "pareceres", historico)

@@ -1,11 +1,12 @@
 """
-Aba Demandas (RF001, RF003, RF010, RF014, RS012, RS017).
+Aba Demandas (RF001, RF003, RF004, RF005, RF010, RF014, RF015, RS012, RS017, RS019).
 """
 import datetime
 
 import customtkinter as ctk
 
-from src.models import CANAIS_ORIGEM, STATUS_DEMANDA, STATUS_PADRAO
+from src.models import CANAIS_ORIGEM, STATUS_CONCLUIDA, STATUS_DEMANDA, STATUS_PADRAO
+from src.services import prazos
 from src.ui.formatos import data_br, sim_nao
 from src.ui.theme import Colors, Fonts
 from src.ui.views.aba import AbaBase, Coluna
@@ -106,6 +107,11 @@ class AbaDemandas(AbaBase):
     def valores_linha(self, demanda) -> tuple:
         return (demanda.id, demanda.titulo, demanda.status, data_br(demanda.data_limite))
 
+    def destaque_linha(self, demanda) -> tuple[str, ...]:
+        # RS019: amarelo até 5 dias; vermelho se vencida. Concluídas não se destacam.
+        situacao = prazos.situacao(demanda.data_limite, demanda.status == STATUS_CONCLUIDA)
+        return (situacao,) if situacao else ()
+
     # --- Formulários -----------------------------------------------------------
 
     def criar_formulario(self, demanda_id: int | None):
@@ -185,6 +191,7 @@ class DetalheDemanda(DetalheBase):
             etiquetas,
             ao_editar=lambda: aba.mostrar_formulario(demanda.id),
             ao_excluir=lambda: aba.excluir_demanda(demanda),
+            prazo=_prazo(demanda),
         )
 
         info = self.secao("Informações")
@@ -198,8 +205,12 @@ class DetalheDemanda(DetalheBase):
             ("Pasta local", demanda.caminho_pasta),
         ])
 
+        # Documentos logo após as informações: abrir um arquivo leva 3 interações (RNF007).
+        self.documentos(self.secao("Documentos", ("+ Anexar", lambda: aba.anexar(demanda_id=demanda.id))),
+                        demanda.documentos, aba)
+        self.tags(self.secao("Tags", ("Editar tags", lambda: aba.editar_tags(
+            aba.servicos.demandas, demanda, f"Tags · demanda #{demanda.id}"))), demanda.tags)
         self.texto(self.secao("Observações"), demanda.observacoes)
-        self.tags(self.secao("Tags"), demanda.tags)
 
         subsidios = self.secao("Subsídios", ("+ Adicionar", lambda: aba.formulario_subsidio(demanda.id)))
         if not demanda.subsidios:
@@ -207,7 +218,6 @@ class DetalheDemanda(DetalheBase):
         for subsidio in sorted(demanda.subsidios, key=lambda s: (s.data_aquisicao, s.id)):
             self._subsidio(subsidios, aba, demanda.id, subsidio)
 
-        self.documentos(self.secao("Documentos"), demanda.documentos)
         self.historico(self.secao("Histórico de alterações"), "demandas", historico)
 
     def _subsidio(self, conteudo, aba: AbaDemandas, demanda_id: int, subsidio) -> None:
@@ -221,8 +231,14 @@ class DetalheDemanda(DetalheBase):
         ).pack(side="left")
         botao(topo, "Excluir", lambda: aba.excluir_subsidio(demanda_id, subsidio), tipo="perigo",
               width=64, height=24, font=Fonts.SMALL).pack(side="right")
+        pequenos = dict(width=64, height=24, font=Fonts.SMALL)
         botao(topo, "Editar", lambda: aba.formulario_subsidio(demanda_id, subsidio),
-              width=64, height=24, font=Fonts.SMALL).pack(side="right", padx=(0, 6))
+              **pequenos).pack(side="right", padx=(0, 6))
+        botao(topo, "Tags", lambda: aba.editar_tags(aba.servicos.subsidios, subsidio,
+                                                    f"Tags · subsídio de {subsidio.setor_fonte}"),
+              **pequenos).pack(side="right", padx=(0, 6))
+        botao(topo, "Anexar", lambda: aba.anexar(subsidio_id=subsidio.id),
+              **pequenos).pack(side="right", padx=(0, 6))
         ctk.CTkLabel(
             caixa, text=subsidio.resposta, font=Fonts.BODY, text_color=Colors.TEXT_MAIN,
             anchor="w", justify="left", wraplength=LARGURA_TEXTO - 40,
@@ -230,7 +246,13 @@ class DetalheDemanda(DetalheBase):
         if subsidio.tags:
             self.tags(_subframe(caixa), subsidio.tags)
         if subsidio.documentos:
-            self.documentos(_subframe(caixa), subsidio.documentos)
+            self.documentos(_subframe(caixa), subsidio.documentos, aba)
+
+
+def _prazo(demanda) -> tuple[str, str] | None:
+    """Alerta de prazo para o cabeçalho dos detalhes (RS019)."""
+    situacao = prazos.situacao(demanda.data_limite, demanda.status == STATUS_CONCLUIDA)
+    return (situacao, prazos.descrever(demanda.data_limite)) if situacao else None
 
 
 def _subframe(parent) -> ctk.CTkFrame:
