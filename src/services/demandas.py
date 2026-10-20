@@ -2,13 +2,13 @@
 import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from src.models import (
-    CANAIS_ORIGEM, STATUS_DEMANDA, STATUS_PADRAO, Demanda, Documento, Subsidio, tags_demandas,
+    CANAIS_ORIGEM, STATUS_CONCLUIDA, STATUS_DEMANDA, STATUS_PADRAO, Demanda, Documento, Subsidio, tags_demandas,
 )
-from src.services import historico, pesquisa
+from src.services import historico, pesquisa, prazos
 from src.services.base import ComTags, ServicoBase, exigir, exigir_data, exigir_opcao
 
 OBRIGATORIOS_DEMANDA = (
@@ -72,6 +72,17 @@ class DemandaService(ComTags, ServicoBase):
                 sessao, Demanda, condicoes, texto, pagina, self.campos_pesquisa,
                 tags_demandas, "demanda_id",
             )
+
+    def contar_prazos(self, hoje: datetime.date | None = None) -> prazos.ContagemPrazos:
+        """Total de demandas próximas do prazo e vencidas, exibido ao abrir (RS019, RF015)."""
+        hoje = hoje or datetime.date.today()
+        abertas = Demanda.status != STATUS_CONCLUIDA
+        with self._transacao() as sessao:
+            proximas = sessao.scalar(select(func.count()).where(
+                abertas, Demanda.data_limite >= hoje, Demanda.data_limite <= prazos.ultimo_dia_alerta(hoje),
+            ))
+            vencidas = sessao.scalar(select(func.count()).where(abertas, Demanda.data_limite < hoje))
+        return prazos.ContagemPrazos(proximas, vencidas)
 
     def listar_historico(self, demanda_id: int) -> list:
         """Histórico da demanda e dos seus subsídios e documentos atuais (RF014)."""

@@ -31,6 +31,14 @@ class TagService(ServicoBase):
         with self._transacao() as sessao:
             return list(sessao.scalars(select(Tag).order_by(func.lower(Tag.nome))))
 
+    def usos(self, tag_id: int) -> int:
+        """Quantos registros usam a tag (aviso antes de excluí-la)."""
+        with self._transacao() as sessao:
+            return sum(
+                sessao.scalar(select(func.count()).select_from(associacao).where(associacao.c.tag_id == tag_id))
+                for associacao, _tabela, _coluna in ASSOCIACOES
+            )
+
     def _completar(self, dados: dict[str, Any], criando: bool) -> dict[str, Any]:
         if isinstance(dados.get("cor"), str):
             dados["cor"] = dados["cor"].upper()

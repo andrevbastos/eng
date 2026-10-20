@@ -4,6 +4,7 @@ Só o caminho local é registrado; o arquivo não é copiado (decisão da sessã
 """
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session, selectinload
 
@@ -17,6 +18,7 @@ TABELA_DO_DONO = {"demanda_id": "demandas", "parecer_id": "pareceres", "subsidio
 ARQUIVO_NAO_ENCONTRADO = "Arquivo não encontrado."
 ARQUIVO_GRANDE = "O arquivo ultrapassa o limite de 50 MB."
 UM_DONO = "Informe exatamente um entre demanda, parecer ou subsídio."
+URL_INVALIDA = "Informe um link completo, começando com http:// ou https://."
 
 
 def formato_nao_aceito(extensao: str) -> str:
@@ -28,11 +30,18 @@ def extensao_de(caminho: str) -> str:
     return Path(caminho).suffix.lower().lstrip(".")
 
 
+def url_valida(url: str) -> bool:
+    """RS020: link do Drive colado manualmente (decisão da sessão 6)."""
+    partes = urlparse(url)
+    return partes.scheme in ("http", "https") and bool(partes.netloc) and " " not in url
+
+
 class DocumentoService(ComTags, ServicoBase):
     modelo = Documento
     tabela = "documentos"
-    campos = ("demanda_id", "parecer_id", "subsidio_id", "caminho_arquivo", "tipo_arquivo")
-    campos_fixos = ("demanda_id", "parecer_id", "subsidio_id")
+    campos = ("demanda_id", "parecer_id", "subsidio_id", "caminho_arquivo", "tipo_arquivo", "url_drive")
+    # Trocar o arquivo é remover o anexo e anexar outro; só o link do Drive é editável.
+    campos_fixos = ("demanda_id", "parecer_id", "subsidio_id", "caminho_arquivo")
     carregar = (selectinload(Documento.tags),)
 
     def _normalizar(self, dados: dict[str, Any]) -> dict[str, Any]:
@@ -47,10 +56,15 @@ class DocumentoService(ComTags, ServicoBase):
 
     def _validar(self, sessao: Session, dados: dict[str, Any], registro_id: int | None) -> dict[str, str]:
         erros = exigir(dados, ("caminho_arquivo",))
-        if "caminho_arquivo" not in erros:
+        # O arquivo é conferido ao anexar; depois ele pode ter sido movido, e
+        # isso não deve impedir a edição do link do Drive.
+        if "caminho_arquivo" not in erros and registro_id is None:
             erro_arquivo = self._validar_arquivo(dados["caminho_arquivo"])
             if erro_arquivo:
                 erros["caminho_arquivo"] = erro_arquivo
+
+        if dados.get("url_drive") is not None and not url_valida(dados["url_drive"]):
+            erros["url_drive"] = URL_INVALIDA
 
         donos = [campo for campo in DONOS if dados.get(campo) is not None]
         if len(donos) != 1:
